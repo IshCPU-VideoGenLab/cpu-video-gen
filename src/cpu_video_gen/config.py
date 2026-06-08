@@ -32,7 +32,7 @@ class PipelineConfig:
     """
 
     # Model
-    model_name: str = "wan-1.3b"
+    model_name: str = "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
     model_path: Optional[str] = None
 
     # Video
