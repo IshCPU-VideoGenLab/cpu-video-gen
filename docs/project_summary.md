@@ -85,22 +85,25 @@ Integrates all phases into one pipeline. Builds model (Mamba surgery → BitNet 
 
 ## Hardware Context
 
-### Original Target
-- Intel Pentium Gold 7505 (2 cores/4 threads, 3.5 GHz)
-- 16 GB DDR4 (single channel)
-- No GPU
-- The "if it runs here, it runs everywhere" thesis
+### Primary machine (development + benchmarking)
+- MacBook Air M4 — ARM64 / NEON, 16–24 GB unified memory, no GPU
+- Kernels run natively here via the portable simd-kernels NEON backend
 
-### Current Development Machine
-- MacBook Air M4
-- ARM64 architecture — natively supported via the portable simd-kernels NEON backend
-- Much faster for development iteration
+### Supported, CI-verified
+- Commodity x86 with AVX2 (any modern Intel/AMD CPU)
+- Built and tested on every push by GitHub Actions (`BACKEND=avx2`)
 
-### Honest Assessment (discussed in conversation)
-- The Pentium Gold will struggle with Wan 1.3B (possible OOM at 16 GB)
-- Forward passes could take minutes, making iteration painful
-- Recommended approach: develop on M4, benchmark on Pentium Gold
-- Paper framing may need adjustment from "trains entirely on Pentium Gold" to "inference runs on commodity CPUs"
+### Origin / proof-of-concept (retired)
+- Intel Pentium Gold 7505 (2C/4T, 3.5 GHz, 16 GB, no GPU)
+- Established the thesis on the weakest plausible hardware: "if it runs here, it runs everywhere"
+
+### How the hardware change was resolved
+- The original Phase 5 was AVX2-only (x86). When the Pentium laptop was retired and development moved
+  to the M4 (ARM), Phase 5 was redesigned into a **portable SIMD library** (AVX2 + NEON + scalar) so the
+  kernels run **natively** on both architectures — not a develop-fast / benchmark-on-a-dead-machine workaround.
+- Benchmarks come from the **M4 (NEON)** and **CI-verified commodity x86 (AVX2)**.
+- Paper framing: **CPU-native video generation on commodity hardware, x86 and ARM** — no GPU, no CUDA.
+- Design discipline unchanged: stay within the commodity-hardware budget (≤2–4 cores, 16 GB, no GPU).
 
 ---
 

@@ -22,7 +22,7 @@
 - [ ] Test: generate 16-frame synthetic video
 
 ## Milestone 3: Benchmarking Suite
-- [ ] Benchmark: full pipeline on Pentium Gold (wall-clock time)
+- [ ] Benchmark: full pipeline on M4 (NEON) and commodity x86 (AVX2) (wall-clock time)
 - [ ] Benchmark: per-component breakdown (I-frame gen, P-frame gen, etc.)
 - [ ] Benchmark: memory usage profile
 - [ ] Compare: CPU pipeline vs PyTorch GPU baseline (if GPU available)

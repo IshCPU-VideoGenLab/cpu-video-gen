@@ -64,7 +64,7 @@ IshCPU-VideoGenLab/
 │     ~8-16× speedup (with native kernels).
 │
 ├── 5. simd-kernels           Native silicon speed (REPLACES old avx2-kernels)
-│     Portable SIMD: NEON backend (M4), AVX2 backend (Pentium Gold),
+│     Portable SIMD: NEON backend (M4), AVX2 backend (commodity x86),
 │     scalar fallback (anything). One API, compile-time selection.
 │     Compiled & tested: 8/8 tests pass.
 │
@@ -187,7 +187,7 @@ python scripts/run_quantize.py --model wan-1.3b
 
 ```bash
 cd simd-kernels
-make                    # Auto-detects NEON on M4, AVX2 on Pentium Gold
+make                    # Auto-detects NEON on M4, AVX2 on x86
 make test               # Should say "8 passed, 0 failed"
 pip install -e .
 python scripts/run_benchmark.py
@@ -270,9 +270,10 @@ Every repo has:
 
 ## Hardware Strategy
 
-- **Develop on M4 MacBook** — fast iteration, NEON backend for Phase 5
-- **Benchmark on Pentium Gold** — paper numbers, proves accessibility thesis
-- **Paper reports both** — shows portability across architectures
+- **Primary machine (development + benchmarking): MacBook Air M4** — fast iteration, NEON backend for Phase 5
+- **Commodity x86 (AVX2): CI-verified** on every push — the affordable-hardware target
+- **Paper reports both architectures** — CPU-native on ARM (M4) and x86, no GPU
+- Design stays within the commodity-hardware budget (≤2–4 cores, 16 GB, no GPU)
 
 ---
 

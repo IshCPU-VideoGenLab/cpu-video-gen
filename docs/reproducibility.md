@@ -65,11 +65,16 @@ for the paper results.
 
 ## Hardware Used
 
-Primary benchmark machine:
-- Intel Pentium Gold 7505
-- 2 cores / 4 threads, 3.5 GHz
-- 16 GB DDR4 3200 MHz (single channel)
-- Ubuntu 22.04 / Windows 11 (WSL2)
+Primary machine (development + benchmarking):
+- Apple MacBook Air M4 — ARM64 / NEON
+- 10 cores (4P + 6E), 16–24 GB unified memory, no GPU
+- macOS
+
+Supported, CI-verified:
+- Commodity x86 with AVX2 (any modern Intel/AMD CPU), Ubuntu — built & tested on every push
+
+Original proof-of-concept (retired):
+- Intel Pentium Gold 7505 — 2C/4T, 3.5 GHz, 16 GB DDR4, no GPU
 
 Results may vary on different hardware. The relative speedups
 (ablation ratios) should be consistent across machines.

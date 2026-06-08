@@ -104,19 +104,21 @@ cpu-video-gen/
 
 ## Hardware Target
 
-The paper's **benchmark reference** is the Pentium Gold — the canonical thesis machine. Development
-happens on a **MacBook Air M4 (ARM64)** (the original Pentium laptop was retired). Both are first-class
-CPU-native targets: the portable SIMD library (Phase 5) runs on x86 via AVX2 and on ARM via NEON, so
-the paper reports CPU-native results on **both** architectures.
+The **primary** development and benchmark machine is a **MacBook Air M4 (ARM64, NEON)**. Commodity
+**x86 with AVX2** is a first-class, **CI-verified** target. The original proof-of-concept — an Intel
+**Pentium Gold 7505** — is retired but remains the thesis origin (the weakest-hardware case). The
+portable SIMD library (Phase 5) runs on x86 via AVX2 and ARM via NEON, so the paper reports
+CPU-native results on **both** architectures.
 
-| Spec | Benchmark target | Dev machine |
-|------|------------------|-------------|
-| CPU | Intel Pentium Gold 7505 (2C/4T, 3.5 GHz, x86-64 AVX2) | Apple M4 (ARM64, NEON) |
-| RAM | 16 GB DDR4 | 16 GB unified |
-| GPU | None (CPU-only) | Unused (CPU-only) |
-| SIMD backend | AVX2 | NEON |
+| Spec | Primary (dev + benchmark) | Supported (CI-verified) | Origin (retired) |
+|------|---------------------------|-------------------------|------------------|
+| CPU  | Apple M4 (ARM64, NEON) | Commodity x86 (AVX2) | Pentium Gold 7505 (x86, AVX2) |
+| RAM  | 16–24 GB unified | 16 GB typical | 16 GB DDR4 |
+| GPU  | none (CPU-only) | none (CPU-only) | none (CPU-only) |
+| SIMD | NEON | AVX2 | AVX2 |
 
-> Target principle: *if it runs on a Pentium Gold, it runs everywhere.*
+> Design principle: CPU-native on commodity hardware, x86 **and** ARM. Stay within the
+> commodity-hardware budget (≤2–4 cores, 16 GB, no GPU).
 
 ---
 
