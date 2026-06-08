@@ -134,11 +134,15 @@ python scripts/reproduce_paper.py --table 2
 
 ## Hardware Tested
 
-| Machine | CPU | Cores | RAM | Result |
-|---------|-----|-------|-----|--------|
-| **Target** | Pentium Gold 7505 | 2C/4T | 16 GB | Primary benchmark |
-| Test | Core i5-1135G7 | 4C/8T | 16 GB | Comparison |
-| Test | Ryzen 5 5500U | 6C/12T | 16 GB | Comparison |
+CPU-native, no GPU, across both architectures (x86 and ARM):
+
+| Machine | CPU | Arch | Cores | RAM | Role |
+|---------|-----|------|-------|-----|------|
+| **MacBook Air M4** | Apple M4 | ARM64 / NEON | 10 | 16–24 GB | **Primary — development + benchmark** |
+| CI runner | Intel / AMD | x86-64 / AVX2 | — | — | Verified every push ([simd-kernels CI](https://github.com/IshCPU-VideoGenLab/simd-kernels/actions)) |
+| Core i5-1135G7 | Intel | x86-64 / AVX2 | 4C/8T | 16 GB | x86 comparison |
+| Ryzen 5 5500U | AMD | x86-64 / AVX2 | 6C/12T | 16 GB | x86 comparison |
+| Pentium Gold 7505 | Intel | x86-64 / AVX2 | 2C/4T | 16 GB | Original proof-of-concept (retired) |
 
 ---
 
