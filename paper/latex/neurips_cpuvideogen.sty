@@ -1,0 +1,89 @@
+% neurips_cpuvideogen.sty — Minimal NeurIPS-like style for cpu-video-gen paper
+% Based on NeurIPS 2024 formatting guidelines
+
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{neurips_cpuvideogen}[2026/01/01 CPU-VideoGen Paper Style]
+
+% Page geometry (NeurIPS standard)
+\RequirePackage[
+  letterpaper,
+  textwidth=5.5in,
+  textheight=9in,
+  top=1in,
+  left=1.5in
+]{geometry}
+
+% Fonts
+\RequirePackage{times}
+\RequirePackage[T1]{fontenc}
+\RequirePackage[utf8]{inputenc}
+
+% Math
+\RequirePackage{amsmath}
+\RequirePackage{amssymb}
+\RequirePackage{amsfonts}
+
+% Graphics & tables
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{multirow}
+\RequirePackage{array}
+
+% Colors & links
+\RequirePackage{xcolor}
+\RequirePackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+% Algorithms
+\RequirePackage{algorithm}
+\RequirePackage{algorithmic}
+
+% Citations
+\RequirePackage{natbib}
+\bibliographystyle{abbrvnat}
+
+% Spacing
+\RequirePackage{setspace}
+\linespread{1.0}
+\setlength{\parskip}{0.5em}
+\setlength{\parindent}{0em}
+
+% Section formatting
+\RequirePackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection}{1em}{}
+
+% Abstract environment
+\renewenvironment{abstract}{%
+  \centerline{\large\bfseries Abstract}%
+  \vspace{0.5em}%
+  \begin{quote}\small
+}{%
+  \end{quote}\vspace{1em}
+}
+
+% Title formatting
+\newcommand{\papertitle}[1]{%
+  \begin{center}
+    {\LARGE\bfseries #1\par}
+    \vspace{1em}
+  \end{center}
+}
+
+\newcommand{\paperauthor}[3]{%
+  \begin{center}
+    {\large #1}\\[0.3em]
+    {\normalsize #2}\\[0.2em]
+    {\small\texttt{#3}}
+    \vspace{1em}
+  \end{center}
+}
+
+% TODO command for placeholders
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{[TODO: #1]}}}
+\newcommand{\placeholder}[1]{\textcolor{blue}{\textit{[#1]}}}
+
+% Footnote style
+\renewcommand{\footnoterule}{\kern-3pt\hrule width 0.4\textwidth\kern 2.6pt}
+
+\endinput

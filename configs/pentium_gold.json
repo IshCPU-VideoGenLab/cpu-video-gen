@@ -1,0 +1,27 @@
+{
+  "model_name": "wan-1.3b",
+  "num_frames": 16,
+  "resolution": [256, 256],
+  "latent_shape": [4, 32, 32],
+  "keyframe_interval": 8,
+  "d_state": 16,
+  "d_conv": 4,
+  "mamba_expand": 2,
+  "weight_bits": 1,
+  "activation_bits": 8,
+  "use_avx2": true,
+  "delta_hidden_channels": 64,
+  "delta_num_blocks": 3,
+  "dtype": "float16",
+  "seed": 42,
+  "_hardware": {
+    "cpu": "Intel Pentium Gold 7505",
+    "cores": 2,
+    "threads": 4,
+    "ram_gb": 16,
+    "l1_data_kb": 80,
+    "l2_mb": 1.25,
+    "l3_mb": 4
+  },
+  "_notes": "Reduced delta predictor size to fit in 16GB alongside full model"
+}
