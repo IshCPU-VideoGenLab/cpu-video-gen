@@ -23,7 +23,7 @@ Build the first video generation model that trains and runs entirely on commodit
 | 2 | `mamba-video` | 31 | Replace O(n²) attention with O(n) Mamba SSM |
 | 3 | `codec-video-gen` | 34 | I-frame/P-frame temporal design (like H.264) |
 | 4 | `bitnet-video` | 33 | 1-bit weight quantization (XNOR + popcount) |
-| 5 | `avx2-kernels` | 39 | Native C kernels with AVX2 SIMD intrinsics |
+| 5 | `simd-kernels` | 39 | Portable C kernels (AVX2 + NEON intrinsics) |
 | 6 | `cpu-distributed` | 34 | Distributed training via evolution strategies |
 | 7 | `cpu-video-gen` | 35 | Flagship paper repo integrating all phases |
 
@@ -60,14 +60,14 @@ Borrows from H.264 video codecs. Instead of generating every frame through the f
 ### Phase 4: bitnet-video
 Constrains weights to {-1, +1}. Matrix multiply becomes XNOR + popcount. BitLinear and BitConv2d are drop-in replacements for nn.Linear and nn.Conv2d. Straight-Through Estimator for gradient flow. Memory reduction: 16× (2.6 GB → 160 MB).
 
-### Phase 5: avx2-kernels
-C code with AVX2 intrinsics. Binary GEMM processes 256 weight bits per XNOR instruction. SSM scan vectorized with _mm256_fmadd_ps. Popcount via nibble lookup table. Python bindings via ctypes with PyTorch fallback.
+### Phase 5: simd-kernels
+Portable C kernels with a unified API over three backends — AVX2 (x86), NEON (ARM), and a scalar fallback — selected at compile time. Binary GEMM processes 256 weight bits per XNOR on AVX2 (128 on NEON). SSM scan vectorized with FMA (`_mm256_fmadd_ps` / `vfmaq_f32`). Popcount via nibble lookup table. Python bindings via ctypes with PyTorch fallback.
 
 ### Phase 6: cpu-distributed
 Evolution strategies optimizer. Workers perturb parameters, run forward pass, return (seed, fitness_scalar). Communication: ~100 bytes per worker per step. Antithetic sampling halves variance. Adam momentum. Works over WiFi between laptops.
 
 ### Phase 7: cpu-video-gen
-Integrates all phases into one pipeline. Builds model (Mamba surgery → BitNet quantization), generates video (GOP scheduler → I-frame full model → P-frame delta predictor → AVX2 kernels). Includes ablation study framework and `reproduce_paper.py`.
+Integrates all phases into one pipeline. Builds model (Mamba surgery → BitNet quantization), generates video (GOP scheduler → I-frame full model → P-frame delta predictor → SIMD kernels). Includes ablation study framework and `reproduce_paper.py`.
 
 ---
 
@@ -78,7 +78,7 @@ Integrates all phases into one pipeline. Builds model (Mamba surgery → BitNet 
 | Mamba SSM | O(n²) → O(n) attention removal | ~2× |
 | Codec temporal | I/P frame scheduling | ~4-6× |
 | BitNet 1-bit | Binary operations replace float | ~8-16× |
-| AVX2 kernels | Native SIMD execution | ~2× |
+| SIMD kernels | Native execution (AVX2 + NEON) | ~2× |
 | **Combined** | **Multiplicative** | **~64-192×** |
 
 ---
@@ -93,7 +93,7 @@ Integrates all phases into one pipeline. Builds model (Mamba surgery → BitNet 
 
 ### Current Development Machine
 - MacBook Air M4
-- ARM64 architecture (AVX2 kernels need NEON port)
+- ARM64 architecture — natively supported via the portable simd-kernels NEON backend
 - Much faster for development iteration
 
 ### Honest Assessment (discussed in conversation)
@@ -146,7 +146,7 @@ Integrates all phases into one pipeline. Builds model (Mamba surgery → BitNet 
 | `mamba-video.zip` | Phase 2 complete repo |
 | `codec-video-gen.zip` | Phase 3 complete repo |
 | `bitnet-video.zip` | Phase 4 complete repo |
-| `avx2-kernels.zip` | Phase 5 complete repo |
+| `simd-kernels.zip` | Phase 5 complete repo |
 | `cpu-distributed.zip` | Phase 6 complete repo |
 | `cpu-video-gen.zip` | Phase 7 complete repo |
 | `CPU_Native_Video_Generation_Paper.pdf` | 11-page research paper |

@@ -23,7 +23,7 @@ Text Prompt → [Tokenizer] → Conditioning
            └────────┬─────────┘                    │
                     ▼                              │
          ┌──────────────────┐                     │
-         │ AVX2 Execution   │                     │
+         │ SIMD Execution   │                     │
          │ Engine           │                     │
          │ (XNOR+popcount,  │                     │
          │  vectorized scan)│                     │
@@ -60,7 +60,7 @@ Text Prompt → [Tokenizer] → Conditioning
 - Memory: ~16× reduction
 - Compute: XNOR + popcount replaces float matmul
 
-### 4. AVX2 Native Kernels (Phase 5)
+### 4. Portable SIMD Kernels (Phase 5)
 - Binary GEMM: 256 bits per XNOR instruction
 - SSM scan: vectorized across d_state with FMA
 - 1-bit Conv: im2col + binary GEMM

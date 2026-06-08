@@ -33,7 +33,7 @@ A complete video generation pipeline designed from the ground up for CPU executi
 | **Mamba SSM** | Replaces O(n²) attention with O(n) scan | ~2× |
 | **Codec Temporal** | I-frame keyframes + P-frame deltas | ~4-6× |
 | **1-Bit Quantization** | XNOR + popcount replaces float matmul | ~8-16× |
-| **AVX2 Kernels** | Native SIMD execution on CPU | Hardware-native |
+| **Portable SIMD** | Native execution on x86 (AVX2) + ARM (NEON) | Hardware-native |
 | **Distributed ES** | Training across laptops via WiFi | Scales with workers |
 
 **Combined theoretical speedup: 64-192×** over naive GPU-architecture-on-CPU.
@@ -65,7 +65,7 @@ Text Prompt
                │
                ▼
 ┌─────────────────────────────────────────────┐
-│  AVX2 Execution Engine                      │
+│  SIMD Execution Engine                      │
 │  (XNOR+popcount GEMM, vectorized SSM scan) │
 └─────────────────┬───────────────────────────┘
                │
@@ -106,7 +106,7 @@ This repo integrates all previous phases:
 | 2 | [mamba-video](https://github.com/IshCPU-VideoGenLab/mamba-video) | SSM backbone |
 | 3 | [codec-video-gen](https://github.com/IshCPU-VideoGenLab/codec-video-gen) | Temporal design |
 | 4 | [bitnet-video](https://github.com/IshCPU-VideoGenLab/bitnet-video) | 1-bit quantization |
-| 5 | [avx2-kernels](https://github.com/IshCPU-VideoGenLab/avx2-kernels) | Native CPU kernels |
+| 5 | [simd-kernels](https://github.com/IshCPU-VideoGenLab/simd-kernels) | Portable SIMD kernels (AVX2 + NEON) |
 | 6 | [cpu-distributed](https://github.com/IshCPU-VideoGenLab/cpu-distributed) | Distributed training |
 | **7** | **cpu-video-gen** (this repo) | **Full integration** |
 
