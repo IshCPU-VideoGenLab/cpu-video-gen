@@ -30,15 +30,15 @@ cd ..
 git clone https://github.com/IshCPU-VideoGenLab/mamba-video.git
 git clone https://github.com/IshCPU-VideoGenLab/codec-video-gen.git
 git clone https://github.com/IshCPU-VideoGenLab/bitnet-video.git
-git clone https://github.com/IshCPU-VideoGenLab/avx2-kernels.git
+git clone https://github.com/IshCPU-VideoGenLab/simd-kernels.git
 
 # Install each
-for repo in mamba-video codec-video-gen bitnet-video avx2-kernels; do
+for repo in mamba-video codec-video-gen bitnet-video simd-kernels; do
     cd $repo && pip install -e . && cd ..
 done
 
-# Build AVX2 kernels
-cd avx2-kernels && make && cd ..
+# Build SIMD kernels (auto-detects AVX2 on x86, NEON on ARM)
+cd simd-kernels && make && cd ..
 cd cpu-video-gen
 ```
 
