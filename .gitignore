@@ -19,3 +19,7 @@ paper/figures/*.png
 paper/tables/*.csv
 !paper/figures/.gitkeep
 !paper/tables/.gitkeep
+
+# Virtual environments (any name)
+.venv*/
+*venv/

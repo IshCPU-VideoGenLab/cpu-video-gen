@@ -37,15 +37,16 @@ def build_model(config: PipelineConfig) -> Tuple[nn.Module, Dict[str, Any]]:
     logger.info("Building CPU-native model...")
 
     try:
-        from transformers import AutoModel
+        from diffusers import WanTransformer3DModel
 
         dtype_map = {"float16": torch.float16, "float32": torch.float32}
         torch_dtype = dtype_map.get(config.dtype, torch.float16)
 
+        # Wan is a diffusers model; build on the diffusion transformer (DiT).
         path = config.model_path or config.model_name
-        model = AutoModel.from_pretrained(
-            path, torch_dtype=torch_dtype,
-            trust_remote_code=True, low_cpu_mem_usage=True,
+        model = WanTransformer3DModel.from_pretrained(
+            path, subfolder="transformer",
+            torch_dtype=torch_dtype, low_cpu_mem_usage=True,
         )
         model.eval()
         report["base_model"] = config.model_name
