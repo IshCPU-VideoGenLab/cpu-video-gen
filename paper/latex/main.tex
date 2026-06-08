@@ -18,7 +18,7 @@
 % ============================================================================
 
 \begin{abstract}
-Video generation models universally assume GPU acceleration, creating a computational barrier that excludes researchers without access to expensive hardware. We present the first video generation architecture designed from the ground up for commodity CPU execution. Our approach combines four complementary techniques: (1)~replacing quadratic self-attention with linear-time Selective State Space Models (Mamba), (2)~a codec-inspired temporal design that generates keyframes at full fidelity and predicts inter-frame deltas at a fraction of the cost, (3)~BitNet-style 1-bit weight quantization that replaces floating-point matrix multiplication with binary XNOR and popcount operations, and (4)~hand-written AVX2 SIMD kernels that execute these operations at native CPU speed. We profile the Wan~1.3B video generation model, identify the architectural bottlenecks that make it GPU-dependent, and systematically eliminate each one. Our codec-inspired GOP scheduling alone reduces the number of expensive forward passes by $4$--$6\times$, while the combination of all four techniques yields a theoretical speedup of $64$--$192\times$ over a naive CPU baseline. We demonstrate distributed training across commodity laptops using evolution strategies, requiring only scalar fitness values communicated over standard WiFi. All code, models, and reproduction scripts are publicly available.
+Video generation models universally assume GPU acceleration, creating a computational barrier that excludes researchers without access to expensive hardware. We present the first video generation architecture designed from the ground up for commodity CPU execution. Our approach combines four complementary techniques: (1)~replacing quadratic self-attention with linear-time Selective State Space Models (Mamba), (2)~a codec-inspired temporal design that generates keyframes at full fidelity and predicts inter-frame deltas at a fraction of the cost, (3)~BitNet-style 1-bit weight quantization that replaces floating-point matrix multiplication with binary XNOR and popcount operations, and (4)~portable SIMD kernels (AVX2 on x86, NEON on ARM, with a scalar fallback) that execute these operations at native CPU speed across architectures. We profile the Wan~1.3B video generation model, identify the architectural bottlenecks that make it GPU-dependent, and systematically eliminate each one. Our codec-inspired GOP scheduling alone reduces the number of expensive forward passes by $4$--$6\times$, while the combination of all four techniques yields a theoretical speedup of $64$--$192\times$ over a naive CPU baseline. We demonstrate distributed training across commodity laptops using evolution strategies, requiring only scalar fitness values communicated over standard WiFi. All code, models, and reproduction scripts are publicly available.
 
 \end{abstract}
 
@@ -39,11 +39,11 @@ Our contributions are:
   \item A codec-inspired temporal generation framework that decomposes video synthesis into expensive keyframe generation (I-frames) and lightweight delta prediction (P-frames), reducing the number of full forward passes by $4$--$6\times$.
   \item Integration of Mamba Selective State Space Models as a drop-in replacement for self-attention, reducing per-frame complexity from $O(n^2)$ to $O(n)$.
   \item Application of BitNet 1-bit quantization to the video generation backbone, replacing float matmul with XNOR+popcount operations executable on CPU integer ALUs.
-  \item Native AVX2 SIMD kernels for binary GEMM, SSM scan, and 1-bit convolution, achieving hardware-native execution on any post-2013 x86 CPU.
+  \item Portable SIMD kernels (AVX2 on x86, NEON on ARM, scalar fallback elsewhere) for binary GEMM, SSM scan, and 1-bit convolution, achieving hardware-native execution on commodity CPUs of either architecture.
   \item A distributed training protocol using evolution strategies that requires only scalar fitness communication over standard network connections.
 \end{itemize}
 
-The complete system runs on an Intel Pentium Gold 7505 (2 cores, 16\,GB RAM)---a \$200 laptop CPU. If it runs there, it runs everywhere.
+The complete system runs CPU-native on commodity hardware of either architecture, with no GPU at any point: we benchmark on an Apple~M4 (ARM/NEON) and verify the x86 (AVX2) path in continuous integration. The project's original proof-of-concept ran on a \$200 Intel Pentium Gold laptop. The method---not any single machine---is what removes the GPU barrier.
 
 % ============================================================================
 % 2. RELATED WORK
@@ -80,7 +80,7 @@ Before redesigning the architecture, we must understand where Wan~1.3B spends it
 
 \subsection{Methodology}
 
-We profile Wan~1.3B on an Intel Pentium Gold 7505 (2 cores, 4 threads, 3.5\,GHz, 16\,GB DDR4) using float16 precision. Input: batch size 1, 8 frames at $256 \times 256$ resolution (latent space: $4 \times 32 \times 32$). We run 2 warmup iterations followed by 5 timed iterations, reporting mean and standard deviation.
+We profile Wan~1.3B on an Apple~M4 (ARM64, 16\,GB unified memory) using float16 precision. Input: batch size 1, 8 frames at $256 \times 256$ resolution (latent space: $4 \times 32 \times 32$). We run 2 warmup iterations followed by 5 timed iterations, reporting mean and standard deviation.
 
 \subsection{Results}
 
@@ -185,18 +185,18 @@ where $\text{XOR}$ counts differing bits and $\text{popcount}$ counts set bits. 
 
 \textbf{Memory reduction.} At 1 bit per weight plus scaling factors, the 1.3B parameter model occupies approximately 160\,MB versus 2.6\,GB at float16---a $16\times$ reduction that easily fits in the 16\,GB RAM budget.
 
-\subsection{AVX2 Native Kernels}
+\subsection{Portable SIMD Kernels}
 \label{sec:avx2}
 
-We implement three C kernels using AVX2 SIMD intrinsics (256-bit vectors), targeting any x86 CPU manufactured since 2013:
+We implement three C kernels behind a unified API with three compile-time backends---AVX2 (x86, 256-bit vectors), NEON (ARM, 128-bit vectors), and a scalar fallback---so the same code runs natively on x86 CPUs (since 2013) and ARM CPUs (Apple Silicon, AWS Graviton, Raspberry Pi):
 
-\textbf{Binary GEMM.} Each \texttt{\_mm256\_xor\_si256} instruction processes 256 weight bits simultaneously. Popcount is computed via a nibble lookup table using \texttt{\_mm256\_shuffle\_epi8}, achieving approximately one popcount per cycle per 32-byte vector. Matrix operations are tiled to L1 cache size (80\,KB on the Pentium Gold).
+\textbf{Binary GEMM.} Each \texttt{\_mm256\_xor\_si256} instruction processes 256 weight bits simultaneously. Popcount is computed via a nibble lookup table using \texttt{\_mm256\_shuffle\_epi8}, achieving approximately one popcount per cycle per 32-byte vector. On ARM, NEON computes popcount directly via the native \texttt{vcntq\_u8} instruction. Matrix operations are tiled to the target CPU's L1 cache size.
 
-\textbf{SSM scan.} The sequential scan (Eq.~\ref{eq:ssm_state}) is vectorized across the state dimension $d_{\text{state}}$ using \texttt{\_mm256\_fmadd\_ps} (fused multiply-add on 8 floats). With $d_{\text{state}}=16$, each timestep requires only 2 AVX2 iterations.
+\textbf{SSM scan.} The sequential scan (Eq.~\ref{eq:ssm_state}) is vectorized across the state dimension $d_{\text{state}}$ using fused multiply-add (\texttt{\_mm256\_fmadd\_ps} on AVX2, \texttt{vfmaq\_f32} on NEON). With $d_{\text{state}}=16$, each timestep requires only a few SIMD iterations.
 
 \textbf{1-bit convolution.} Convolutions in the delta predictor are converted to matrix multiplications via im2col, then executed through the binary GEMM kernel.
 
-All kernels include scalar reference implementations for correctness verification and gracefully fall back to PyTorch when AVX2 is unavailable.
+All kernels include scalar reference implementations for correctness verification, are tested against that reference on both x86 (AVX2) and ARM (NEON) in continuous integration, and gracefully fall back to PyTorch when no native backend is available.
 
 \subsection{Distributed CPU Training}
 \label{sec:distributed}
@@ -218,9 +218,9 @@ Antithetic sampling (evaluating both $+\epsilon$ and $-\epsilon$) halves gradien
 
 \section{Experimental Setup}
 
-\textbf{Hardware.} Primary benchmark: Intel Pentium Gold 7505 (2 cores, 4 threads, 3.5\,GHz), 16\,GB DDR4 3200\,MHz (single channel), no discrete GPU. This represents the lower end of commodity hardware---a deliberate choice to establish a conservative performance floor.
+\textbf{Hardware.} Primary benchmark: Apple~M4 (ARM64, NEON), 16\,GB unified memory, no discrete GPU. The x86 (AVX2) path is verified for correctness against the scalar reference in continuous integration on commodity Intel/AMD CPUs. The project's original proof-of-concept target was a \$200 Intel Pentium Gold 7505 (x86, AVX2, 2 cores, 16\,GB), retired during development; redesigning the kernels as a \emph{portable} SIMD library (AVX2/NEON/scalar) is what enables the cross-architecture results reported here, and demonstrates that the method generalizes beyond any single machine.
 
-\textbf{Software.} Python 3.9, PyTorch (CPU-only build), custom C kernels compiled with \texttt{gcc -mavx2 -O3 -march=native}. All code is available at \texttt{github.com/IshCPU-VideoGenLab}.
+\textbf{Software.} Python 3.9, PyTorch (CPU-only build), portable SIMD C kernels (AVX2 on x86 via \texttt{gcc -mavx2 -mfma -O3}; NEON on ARM via \texttt{clang -O3}; scalar fallback elsewhere). All code is available at \texttt{github.com/IshCPU-VideoGenLab}.
 
 \textbf{Base model.} Wan~1.3B~\citep{wan2024}, selected for its manageable size (fits in 16\,GB at float16) and the author's prior experience with the Wan architecture through the TeachDiffusion project.
 
@@ -235,7 +235,7 @@ Antithetic sampling (evaluating both $+\epsilon$ and $-\epsilon$) halves gradien
   \item \emph{+Mamba}: Attention replaced with SSM, all else unchanged
   \item \emph{+Codec}: I/P frame scheduling ($K=8$), all else unchanged
   \item \emph{+BitNet}: 1-bit quantization, all else unchanged
-  \item \emph{+AVX2}: Native kernels, all else unchanged
+  \item \emph{+SIMD}: Portable native kernels (AVX2/NEON), all else unchanged
   \item \emph{Full}: All optimizations combined
 \end{enumerate}
 
@@ -283,7 +283,7 @@ GOP Size ($K$) & I-frames & P-frames & Speedup \\
 
 \todo{Insert results: (a)~Quality metrics (MSE, cosine similarity) for float16 vs.\ 1-bit model. (b)~Per-layer quantization error analysis---which layers are most sensitive? (c)~Memory footprint comparison.}
 
-\subsection{AVX2 Kernel Performance}
+\subsection{Portable SIMD Kernel Performance}
 
 \todo{Insert Table~3: Binary GEMM throughput (GOPS) at various matrix sizes. SSM scan speedup vs.\ PyTorch loop. 1-bit conv speedup vs.\ PyTorch F.conv2d.}
 
@@ -303,13 +303,13 @@ GOP Size ($K$) & I-frames & P-frames & Speedup \\
 
 \section{Discussion}
 
-\textbf{Speedup composition.} Each optimization targets a different bottleneck, and their effects compose multiplicatively rather than additively. Mamba reduces per-operation cost. Codec reduces the number of operations. BitNet reduces the cost of each remaining operation. AVX2 eliminates framework overhead. The multiplicative composition---not any single technique---is what makes CPU-native generation feasible.
+\textbf{Speedup composition.} Each optimization targets a different bottleneck, and their effects compose multiplicatively rather than additively. Mamba reduces per-operation cost. Codec reduces the number of operations. BitNet reduces the cost of each remaining operation. The portable SIMD kernels eliminate framework overhead. The multiplicative composition---not any single technique---is what makes CPU-native generation feasible.
 
 \textbf{Quality-speed tradeoffs.} Our framework exposes several knobs for trading quality against speed: the number of Mamba-replaced blocks, the GOP size, the quantization precision, and the delta predictor capacity. Users can tune these based on their hardware and quality requirements.
 
-\textbf{Limitations.} Our current system has several limitations. First, the 1-bit quantization is applied post-training; quantization-aware training would likely improve quality. Second, the delta predictor is not yet trained on real video data---our evaluation uses synthetic latent sequences. Third, the AVX2 binary GEMM does not yet implement optimal cache tiling for all matrix sizes. Fourth, our distributed training demonstration uses only 2--3 machines; scaling to larger clusters remains untested.
+\textbf{Limitations.} Our current system has several limitations. First, the 1-bit quantization is applied post-training; quantization-aware training would likely improve quality. Second, the delta predictor is not yet trained on real video data---our evaluation uses synthetic latent sequences. Third, the SIMD binary GEMM does not yet implement optimal cache tiling for all matrix sizes on every backend. Fourth, our distributed training demonstration uses only 2--3 machines; scaling to larger clusters remains untested.
 
-\textbf{Broader impact.} This work directly addresses compute inequality in AI research. The majority of the world's researchers lack access to GPU clusters. By demonstrating that video generation is feasible on commodity CPUs, we lower the barrier to participation in generative AI research. A student in Accra with a \$200 laptop can now contribute to video generation---the same field that previously required \$10,000+ GPU hardware.
+\textbf{Broader impact.} This work directly addresses compute inequality in AI research. The majority of the world's researchers lack access to GPU clusters. By demonstrating that video generation is feasible on commodity CPUs---with no GPU dependency and portable kernels that run natively on both x86 (CI-verified) and ARM---we lower the barrier to participation in generative AI research. A researcher with a low-cost commodity laptop, of either architecture, can now contribute to video generation---the same field that previously required \$10,000+ GPU hardware.
 
 % ============================================================================
 % 8. CONCLUSION
@@ -317,7 +317,7 @@ GOP Size ($K$) & I-frames & P-frames & Speedup \\
 
 \section{Conclusion}
 
-We presented the first video generation architecture designed for commodity CPU execution. By combining Mamba SSM blocks (eliminating quadratic attention), codec-inspired temporal scheduling (eliminating redundant computation), BitNet 1-bit quantization (eliminating float arithmetic), and AVX2 SIMD kernels (eliminating framework overhead), we achieve a theoretical speedup of $64$--$192\times$ over a naive CPU baseline. Our distributed training protocol using evolution strategies enables fine-tuning across laptops connected over standard WiFi.
+We presented the first video generation architecture designed for commodity CPU execution. By combining Mamba SSM blocks (eliminating quadratic attention), codec-inspired temporal scheduling (eliminating redundant computation), BitNet 1-bit quantization (eliminating float arithmetic), and portable SIMD kernels (eliminating framework overhead, natively on both x86 and ARM), we achieve a theoretical speedup of $64$--$192\times$ over a naive CPU baseline. Our distributed training protocol using evolution strategies enables fine-tuning across laptops connected over standard WiFi.
 
 Every component is open-source across seven public repositories, with reproduction scripts that regenerate all paper results from a single command. We hope this work demonstrates that frontier AI research does not require frontier hardware.
 
@@ -420,20 +420,19 @@ Individual components are available as separate repositories under the \texttt{I
 
 \begin{table}[h]
 \centering
-\caption{Primary benchmark hardware.}
+\caption{Primary benchmark hardware (Apple~M4). The x86 (AVX2) path is verified for correctness in continuous integration on commodity Intel/AMD CPUs; the project's original proof-of-concept ran on a \$200 Intel Pentium Gold 7505.}
 \begin{tabular}{@{}ll@{}}
 \toprule
 Component & Specification \\
 \midrule
-CPU & Intel Pentium Gold 7505 \\
-Cores / Threads & 2 / 4 \\
-Clock & Up to 3.5\,GHz \\
-ISA Extensions & SSE4.2, AVX2 \\
-L1 Data Cache & 80\,KB \\
-L2 Cache & 1.25\,MB \\
-L3 Cache & 4\,MB \\
-RAM & 16\,GB DDR4 3200\,MHz (single channel) \\
-GPU & Intel UHD Graphics (integrated, unused) \\
+CPU & Apple M4 (ARM64) \\
+Cores / Threads & 10 (4 performance + 6 efficiency) \\
+Clock & Up to 4.4\,GHz (performance cores) \\
+ISA Extensions & ARMv9-A, NEON \\
+L1 Data Cache & 128\,KB (performance core) \\
+L2 Cache & 16\,MB (shared) \\
+RAM & 16--24\,GB LPDDR5X (unified) \\
+GPU & 10-core integrated (unused) \\
 \bottomrule
 \end{tabular}
 \end{table}
