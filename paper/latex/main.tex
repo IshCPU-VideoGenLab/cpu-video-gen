@@ -287,15 +287,47 @@ for the feed-forward layers.
 
 \subsection{Mamba Surgery}
 
-\todo{Insert Figure~2: Quality (cosine similarity with original output) vs.\ number of attention blocks replaced with Mamba. Expected: quality degrades gracefully up to a threshold, then drops sharply. The ``sweet spot'' determines how many blocks can be safely replaced.}
+We replace self-attention with Mamba blocks and measure the drift of the model's
+latent output vs.\ the original over a short denoise (Table~\ref{tab:mamba}).
+Replacing all 30 self-attention blocks with \emph{untrained} Mamba keeps the
+final-latent cosine similarity at $0.984$; partial replacement is more faithful
+still. Decoded to pixels, full self-attention replacement yields $25.5$\,dB PSNR
+vs.\ the original---structure preserved with minor visible differences, and
+recoverable with fine-tuning.
 
-\placeholder{Figure 2: Quality vs.\ blocks replaced. The progressive replacement analysis reveals which attention blocks are redundant (safe to replace) and which are critical (must remain).}
+\begin{table}[h]
+\centering
+\caption{Self-attention Mamba surgery: latent-output fidelity vs.\ the original
+(4-step denoise, 256 tokens, untrained Mamba).}
+\label{tab:mamba}
+\begin{tabular}{@{}lc@{}}
+\toprule
+Self-attention blocks replaced & Final-latent cosine \\
+\midrule
+8 of 30 & $0.995$ \\
+30 of 30 (all) & $0.984$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This applies to \emph{self-attention} (the $O(n^2)$ term). Cross-attention is
+only $O(n\cdot m)$---linear in image tokens for a fixed text length $m$---and
+carries the text conditioning; replacing it with a pooled-text SSM collapses the
+output (cosine $0.37$). We therefore replace self-attention and \emph{retain}
+cross-attention.
 
 \subsection{Codec Temporal Design}
 
-\todo{Insert Figure~3: (a)~Temporal redundancy analysis---cosine similarity between consecutive latent frames as a function of frame distance. (b)~Quality vs.\ GOP size (keyframe interval). (c)~Speedup vs.\ GOP size.}
-
-\placeholder{Figure 3: Temporal analysis and codec performance. High inter-frame similarity validates the codec approach. Quality degrades gradually with increasing GOP size while speedup increases linearly.}
+The codec's compute saving is \emph{structural}: generating one keyframe per
+group of $K$ frames and predicting the rest as deltas requires $K-1$ fewer
+full-model forward passes per group (Table~\ref{tab:codec_theory}), and a single
+full DiT forward is ${\sim}5$\,s on CPU (Section~\ref{sec:profiling}). Its
+\emph{quality} depends on inter-frame redundancy, whose measurement requires
+real prompted generation: with a dummy text embedding the generated content is
+temporally incoherent by construction (adjacent-frame latent cosine ${\sim}0.28$),
+so a redundancy figure on it is uninformative. The real-prompt temporal-redundancy
+analysis and the quality-vs-GOP curve are left for evaluation with precomputed
+text embeddings.
 
 The theoretical compute savings from codec scheduling are:
 
@@ -317,21 +349,89 @@ GOP Size ($K$) & I-frames & P-frames & Speedup \\
 
 \subsection{Quantization Impact}
 
-\todo{Insert results: (a)~Quality metrics (MSE, cosine similarity) for float16 vs.\ 1-bit model. (b)~Per-layer quantization error analysis---which layers are most sensitive? (c)~Memory footprint comparison.}
+Post-training 1-bit weight quantization (sign with a per-output-channel scale)
+applied to the feed-forward layers preserves latent-output cosine at $0.947$
+($21.4$\,dB PSNR); quantizing all linear layers gives $0.847$
+(Table~\ref{tab:quant}). The headline benefit is memory: the $1.42$\,B-parameter
+DiT shrinks from ${\sim}2.84$\,GB (bfloat16) to ${\sim}178$\,MB at 1 bit
+(${\sim}16\times$). These are post-training numbers (no quantization-aware
+training); the residual drift is what QAT must recover.
+
+\begin{table}[h]
+\centering
+\caption{1-bit weight quantization: output fidelity vs.\ the original
+(post-training, 4-step denoise).}
+\label{tab:quant}
+\begin{tabular}{@{}lcc@{}}
+\toprule
+Configuration & Latent cosine & Pixel PSNR \\
+\midrule
+FFN 1-bit (60 layers) & $0.947$ & $21.4$\,dB \\
+All linear 1-bit (306 layers) & $0.847$ & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Portable SIMD Kernel Performance}
 
-\todo{Insert Table~3: Binary GEMM throughput (GOPS) at various matrix sizes. SSM scan speedup vs.\ PyTorch loop. 1-bit conv speedup vs.\ PyTorch F.conv2d.}
+Our multithreaded binary GEMM sustains ${\sim}3{,}500$ GOPS on the Apple~M4
+(NEON), about $2\times$ PyTorch/Accelerate at $1024{\times}1024{\times}4096$
+(Table~\ref{tab:gemm}); single-threaded it reaches ${\sim}500$ GOPS. The native
+SSM scan is bit-exact vs.\ the Python reference (cosine $1.00001$) and roughly
+halves the per-step scan cost. All kernels are verified in continuous integration
+on both x86 (AVX2) and ARM (NEON).
+
+\begin{table}[h]
+\centering
+\caption{Binary GEMM: multithreaded native kernel vs.\ PyTorch (Accelerate) on
+Apple~M4 (NEON). The speedup grows with size as the float baseline's work grows
+faster than the binary kernel's.}
+\label{tab:gemm}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+Matrix size ($M{\times}N{\times}K$) & PyTorch (ms) & Binary GEMM (ms) & Speedup \\
+\midrule
+$256{\times}512{\times}1024$ & $0.21$ & $0.16$ & $1.3\times$ \\
+$512{\times}512{\times}2048$ & $0.71$ & $0.40$ & $1.8\times$ \\
+$1024{\times}1024{\times}4096$ & $5.39$ & $2.46$ & $2.2\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Ablation Study}
 
-\todo{Insert Table~2 (the main results table): Wall-clock time, memory, and quality for each ablation configuration. This is the central result of the paper---showing how each optimization contributes and how they compose multiplicatively.}
+Each optimization has been validated independently on the real Wan~1.3B DiT
+(Table~\ref{tab:ablation}). The fully integrated configuration---all optimizations
+combined into a single fine-tuned model with end-to-end wall-clock and FID
+measurements---requires the distributed fine-tuning of the surgically modified
+and quantized parameters, and is ongoing work. We report the per-component
+measurements that are established.
 
-\placeholder{Table 2: Ablation study. Expected structure: Configuration | Time (ms) | Memory (MB) | Quality | Speedup. The ``Full'' row shows the combined effect of all optimizations.}
+\begin{table}[h]
+\centering
+\caption{Per-component contributions, measured on the real DiT. ``Fidelity'' is
+output cosine vs.\ the original (untrained/post-training). The end-to-end
+speedup and quality of the combined \emph{fine-tuned} model are future work.}
+\label{tab:ablation}
+\begin{tabular}{@{}lll@{}}
+\toprule
+Optimization & Effect & Fidelity \\
+\midrule
+Mamba self-attn & $O(n^2)\!\to\!O(n)$; crossover ${\sim}512$ tokens & $0.984$ \\
+Codec (GOP$=8$) & ${\sim}4.7\times$ fewer full forwards & real-gen pending \\
+1-bit FFN & ${\sim}16\times$ weight memory & $0.947$ \\
+SIMD kernels & ${\sim}2\times$ binary GEMM; bit-exact scan & exact \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Distributed Training}
 
-\todo{Insert training curve from evolution strategies: loss vs.\ step for the delta predictor trained locally and with 2--3 distributed workers. Report convergence rate and wall-clock time.}
+Evolution-strategies fine-tuning of the surgically modified and quantized
+parameters---required to recover quality from the post-surgery/post-quantization
+drift reported above---is the subject of ongoing work; convergence curves across
+distributed workers are not yet available. The protocol (scalar-fitness gossip
+over standard networking) is described in Section~\ref{sec:distributed}.
 
 % ============================================================================
 % 7. DISCUSSION
