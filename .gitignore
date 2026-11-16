@@ -23,3 +23,6 @@ paper/tables/*.csv
 # Virtual environments (any name)
 .venv*/
 *venv/
+
+# Built LaTeX output
+paper/latex/*.pdf
